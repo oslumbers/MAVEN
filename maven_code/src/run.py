@@ -15,7 +15,6 @@ from controllers import REGISTRY as mac_REGISTRY
 from components.episode_buffer import ReplayBuffer
 from components.transforms import OneHot
 
-
 def run(_run, _config, _log):
 
     # check args sanity
@@ -34,7 +33,9 @@ def run(_run, _config, _log):
     _log.info("\n\n" + experiment_params + "\n")
 
     # configure tensorboard logger
-    unique_token = "{}__{}".format(args.name, datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    map_name = _config["env_args"]["key"]
+    unique_token = f"{_config['name']}_seed{_config['seed']}_{map_name}_{datetime.datetime.now()}"
+    #unique_token = "{}_{}_{}".format(args.name,args.env_args['map_name'], datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
     args.unique_token = unique_token
     if args.use_tensorboard:
         tb_logs_direc = os.path.join(dirname(dirname(abspath(__file__))), "results", "tb_logs")
@@ -62,16 +63,13 @@ def run(_run, _config, _log):
     # Making sure framework really exits
     os._exit(os.EX_OK)
 
-
-def evaluate_sequential(args, runner):
-
+def evaluate_sequential(args, runner, learner=None):
     for _ in range(args.test_nepisode):
         runner.run(test_mode=True)
-
     if args.save_replay:
         runner.save_replay()
-
     runner.close_env()
+
 
 def run_sequential(args, logger):
 
@@ -92,7 +90,6 @@ def run_sequential(args, logger):
         "avail_actions": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.int},
         "reward": {"vshape": (1,)},
         "terminated": {"vshape": (1,), "dtype": th.uint8},
-        "noise": {"vshape": (args.noise_dim,)}
     }
     groups = {
         "agents": args.n_agents
@@ -116,7 +113,6 @@ def run_sequential(args, logger):
 
     if args.use_cuda:
         learner.cuda()
-        runner.cuda()
 
     if args.checkpoint_path != "":
 
@@ -148,7 +144,7 @@ def run_sequential(args, logger):
         runner.t_env = timestep_to_load
 
         if args.evaluate or args.save_replay:
-            evaluate_sequential(args, runner)
+            evaluate_sequential(args, runner,learner=learner)
             return
 
     # start training
@@ -177,8 +173,8 @@ def run_sequential(args, logger):
 
             if episode_sample.device != args.device:
                 episode_sample.to(args.device)
-
-            learner.train(episode_sample, runner.t_env, episode)
+            
+            learner.train(episode_sample, runner.t_env, episode,runner.t_env)
 
         # Execute test runs once in a while
         n_test_runs = max(1, args.test_nepisode // runner.batch_size)
@@ -191,11 +187,7 @@ def run_sequential(args, logger):
 
             last_test_T = runner.t_env
             for _ in range(n_test_runs):
-                runner.run(test_mode=True)
-
-            if args.noise_bandit:
-                for _ in range(n_test_runs):
-                    runner.run(test_mode=True, test_uniform=True)
+                runner.run(test_mode=True, episode = episode)
 
         if args.save_model and (runner.t_env - model_save_time >= args.save_model_interval or model_save_time == 0):
             model_save_time = runner.t_env
@@ -206,7 +198,6 @@ def run_sequential(args, logger):
             # learner should handle saving/loading -- delegate actor save/load to mac,
             # use appropriate filenames to do critics, optimizer states
             learner.save_models(save_path)
-            runner.save_models(save_path)
 
         episode += args.batch_size_run
 
@@ -221,6 +212,8 @@ def run_sequential(args, logger):
 
 def args_sanity_check(config, _log):
 
+    # set CUDA flags
+    # config["use_cuda"] = True # Use cuda whenever possible!
     if config["use_cuda"] and not th.cuda.is_available():
         config["use_cuda"] = False
         _log.warning("CUDA flag use_cuda was switched OFF automatically because no CUDA devices are available!")
