@@ -1,8 +1,9 @@
 from functools import partial
 from envs.multiagentenv import MultiAgentEnv
 from envs.lbforaging.environment import ForagingEnv
-from envs.lbforaging.environment_subgoal import ForagingEnv as ForagingEnvSub
+from envs.lbforaging.environment_subgoal import ForagingEnv as ForagingEnvSubGoal
 from envs.lbforaging.environment_sparse import ForagingEnv as ForagingEnvSparse
+from envs.lbforaging.environment_suboptimal import ForagingEnvSuboptimal 
 import sys
 import os
 import gym
@@ -67,7 +68,16 @@ class FlattenObservation(ObservationWrapper):
 class _GymmaWrapper(MultiAgentEnv):
     def __init__(self, key, time_limit, **kwargs):
         self.episode_limit = time_limit
-        if key == 'LBF':
+        if key == 'LBF4x4':
+            self._env = ForagingEnv(players=2,
+                          max_player_level=2,
+                          field_size=(4, 4),
+                          max_food=3,
+                          sight=1,
+                          max_episode_steps=time_limit,
+                          force_coop=True,
+                          normalize_reward=True,)
+        elif key == 'LBF6x6':
             self._env = ForagingEnv(players=2,
                           max_player_level=2,
                           field_size=(6, 6),
@@ -76,8 +86,8 @@ class _GymmaWrapper(MultiAgentEnv):
                           max_episode_steps=time_limit,
                           force_coop=True,
                           normalize_reward=True,)
-        elif key == 'LBF_sub':
-            self._env = ForagingEnvSub(players=2,
+        elif key == 'LBF_subgoal':
+            self._env = ForagingEnvSubGoal(players=2,
                              max_player_level=2,
                              field_size=(8, 8),
                              sight=1,
@@ -93,6 +103,14 @@ class _GymmaWrapper(MultiAgentEnv):
                              max_episode_steps=time_limit,
                              force_coop=False,
                              normalize_reward=True, )
+        elif key == 'LBF_suboptimal':
+            self._env = ForagingEnvSuboptimal(players=2,
+                            max_player_level=2,
+                            field_size=(6, 6),
+                            sight=1,
+                            max_episode_steps=time_limit,
+                            force_coop=False,
+                            normalize_reward=True, )
 
         #self._env = TimeLimit(gym.make(f"{key}"), max_episode_steps=time_limit)
         self._env = FlattenObservation(self._env)
